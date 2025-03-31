@@ -30,10 +30,8 @@ class GPT(nn.Module):
         while seq_len < MAX_SEQ_LEN:
             padding_mask = torch.zeros(1, seq_len)
             logits = self.forward(input_ids ,padding_mask)
-            logits = logits[0,-1,:]
-            prob = F.softmax(logits, dim=-1)
-            prob /= temperature
-            values, indices = torch.topk(prob, top_k)
+            logits = logits[0,-1,:]/temperature
+            values, indices = torch.topk(logits, top_k)
             values = F.softmax(values, dim=-1)
             sum = 0
             rnd = random.random()
@@ -47,7 +45,7 @@ class GPT(nn.Module):
                 break
             input_ids = torch.cat((input_ids, torch.tensor([[token_id]])), 1)
             seq_len += 1
-        return input_ids.squeeze(0).tolist()
+        return input_ids.squeeze(0).tolist()[1:]
 
 if __name__ == "__main__":
     chatgpt = GPT(VOCAB_SIZE, GPT_DIM, MAX_SEQ_LEN, GPT_HEAD, GPT_FF, GPT_BLOCKS)

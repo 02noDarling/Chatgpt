@@ -11,7 +11,11 @@ pad_id = tokenizer.encode(PAD)[0]
 
 class GPTDataset(Dataset):
     def __init__(self, data):
-        self.data = data
+        self.data = []
+        for text in data:
+            if len(tokenizer.encode(text)) <= MAX_SEQ_LEN:
+                self.data.append(text)
+        
 
     def __len__(self):
         return len(self.data)
@@ -29,7 +33,12 @@ def my_collate_fn(batch):
         token_list = copy.deepcopy(batch[i])
         for j in range(max_len-len(token_list)):
             batch[i].append(pad_id)
-    return torch.tensor(batch)
+    paddding_mask = torch.zeros(len(batch), max_len)
+    for i in range(len(batch)):
+        for j in range(len(batch[0])):
+            if batch[i][j] == pad_id:
+                paddding_mask[i][j] = 1
+    return torch.tensor(batch), paddding_mask
 
 if __name__ == "__main__":
     with open('纳兰性德诗集.json','r',encoding='utf-8') as fp:
@@ -43,9 +52,9 @@ if __name__ == "__main__":
             text += "\n"+p
         sample_count+=1
         text_list.append(text)
-    print('共加载%d条数据'%sample_count)
 
     dataset = GPTDataset(text_list)
+    print(f'共加载{len(dataset)}条数据')
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=my_collate_fn)
 
     for batch in dataloader:

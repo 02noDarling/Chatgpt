@@ -20,7 +20,7 @@ class EmbeddingWithPosition(nn.Module):
     
     def forward(self, x): # x:[batch, seq_len]
         x = self.embedding(x)
-        return x + self.position_embedding.unsqueeze(0)[:,:x.shape[1],:]
+        return x + self.position_embedding.unsqueeze(0).expand(x.shape[0],-1,-1)[:,:x.shape[1],:]
 
 if __name__ == "__main__":
     embedding = EmbeddingWithPosition(11, 5, 11)
