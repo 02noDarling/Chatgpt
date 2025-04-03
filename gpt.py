@@ -26,26 +26,28 @@ class GPT(nn.Module):
         return logits      
     
     def generate(self, input_ids, eos ,pad, im_end, temperature=1, top_k=1):
-        seq_len = input_ids.shape[1]
-        while seq_len < MAX_SEQ_LEN:
-            padding_mask = torch.zeros(1, seq_len)
-            logits = self.forward(input_ids ,padding_mask)
-            logits = logits[0,-1,:]/temperature
-            values, indices = torch.topk(logits, top_k)
-            values = F.softmax(values, dim=-1)
-            sum = 0
-            rnd = random.random()
-            token_id = -1
-            for i in range(top_k):
-                sum += values[i]
-                if sum >= rnd: 
-                    token_id = indices[i]
+        self.eval()
+        with torch.no_grad():
+            seq_len = input_ids.shape[1]
+            while seq_len < MAX_SEQ_LEN:
+                padding_mask = torch.zeros(1, seq_len)
+                logits = self.forward(input_ids ,padding_mask)
+                logits = logits[0,-1,:]/temperature
+                values, indices = torch.topk(logits, top_k)
+                values = F.softmax(values, dim=-1)
+                sum = 0
+                rnd = random.random()
+                token_id = -1
+                for i in range(top_k):
+                    sum += values[i]
+                    if sum >= rnd: 
+                        token_id = indices[i]
+                        break
+                if token_id == eos or token_id==pad or token_id==im_end:
                     break
-            if token_id == eos or token_id==pad or token_id==im_end:
-                break
-            input_ids = torch.cat((input_ids, torch.tensor([[token_id]])), 1)
-            seq_len += 1
-        return input_ids.squeeze(0).tolist()[1:]
+                input_ids = torch.cat((input_ids, torch.tensor([[token_id]])), 1)
+                seq_len += 1
+            return input_ids.squeeze(0).tolist()[1:]
 
 if __name__ == "__main__":
     chatgpt = GPT(VOCAB_SIZE, GPT_DIM, MAX_SEQ_LEN, GPT_HEAD, GPT_FF, GPT_BLOCKS)
