@@ -3,17 +3,15 @@ import torch.nn as nn
 from config import *
 
 class VisionTransformer(nn.Module):
-    def __init__(self, image_size, patch_size, dim, nhead, feedfoward, blocks):
+    def __init__(self):
         super(VisionTransformer, self).__init__()
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_patches = (image_size // patch_size) ** 2
-        self.patch_linear = nn.Linear(VIT_OUT_CHANNEL, dim)
-        self.position_embedding = nn.Parameter(torch.randn(1, self.num_patches+1, dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
-        self.conv = nn.Conv2d(in_channels=3, out_channels=VIT_OUT_CHANNEL, kernel_size=patch_size, stride=patch_size, padding=0)
-        encoder_layer = nn.TransformerEncoderLayer(dim, nhead, feedfoward, batch_first=True)
-        self.encoder = nn.TransformerEncoder(encoder_layer, blocks)
+        self.num_patches = (IMAGE_SIZE // PATCH_SIZE) ** 2
+        self.patch_linear = nn.Linear(VIT_OUT_CHANNEL, DIM)
+        self.position_embedding = nn.Parameter(torch.randn(1, self.num_patches+1, DIM))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, DIM))
+        self.conv = nn.Conv2d(in_channels=3, out_channels=VIT_OUT_CHANNEL, kernel_size=PATCH_SIZE, stride=PATCH_SIZE, padding=0)
+        encoder_layer = nn.TransformerEncoderLayer(DIM, VIT_HEAD, VIT_FF, batch_first=True)
+        self.encoder = nn.TransformerEncoder(encoder_layer, VIT_BLOCKS)
 
     def forward(self, images):
         # images shape:[batch, channel=3, width=224, height=224]
@@ -27,9 +25,7 @@ class VisionTransformer(nn.Module):
 
 if __name__ == "__main__":
     batch_size = 10
-    image_size = 224
-    patch_size = 16
-    vit = VisionTransformer(image_size, patch_size, VIT_DIM, VIT_HEAD, VIT_FF, VIT_BLOCKS)
-    images = torch.randn(batch_size, 3, image_size, image_size)
+    vit = VisionTransformer()
+    images = torch.randn(batch_size, 3, IMAGE_SIZE, IMAGE_SIZE)
     output = vit(images)
     print(output.shape)
