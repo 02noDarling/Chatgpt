@@ -25,7 +25,7 @@ if __name__ == "__main__":
     print(f'共加载{len(dataset)}条数据')
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=my_collate_fn)
 
-    chatgpt = GPT(VOCAB_SIZE, GPT_DIM, MAX_SEQ_LEN, GPT_HEAD, GPT_FF, GPT_BLOCKS)
+    chatgpt = GPT()
     optimizer = optim.Adam(chatgpt.parameters(), lr=1e-5)  # Adam优化器
 
     try:

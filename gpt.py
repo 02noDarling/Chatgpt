@@ -5,33 +5,56 @@ from config import *
 import torch.nn.functional as F
 import random
 from tokenizer import BPETokenizer
+from vit import VisionTransformer
 
 class GPT(nn.Module):
-    def __init__(self, vocab_size, dim, max_seq_len, nhead, feedforward, blocks):
+    def __init__(self):
         super(GPT, self).__init__()
-        self.embedding = EmbeddingWithPosition(vocab_size, dim, max_seq_len)
+        self.embedding = EmbeddingWithPosition()
 
         # 用encoder加掩码的方式实现decoder-only
-        decoder_layer = nn.TransformerEncoderLayer(dim, nhead, feedforward, batch_first=True)
-        self.decoder = nn.TransformerEncoder(decoder_layer, blocks)
-        self.mask = nn.Transformer.generate_square_subsequent_mask(max_seq_len)
-        self.prob_linear = nn.Linear(dim, vocab_size)
+        decoder_layer = nn.TransformerEncoderLayer(DIM, GPT_HEAD, GPT_FF, batch_first=True)
+        self.decoder = nn.TransformerEncoder(decoder_layer, GPT_BLOCKS)
+        self.prob_linear = nn.Linear(DIM, VOCAB_SIZE)
+        self.vit = VisionTransformer()
     
-    def forward(self, input_ids, padding_mask=None): # x: [batch, seq_len]
+    def get_vlm_mask(self, images_len, seq_len):
+        mask = torch.full((seq_len, seq_len), float('-inf'))
+        for i in range(images_len):
+            for j in range(images_len):
+                mask[i][j] = 0
+        for i in range(images_len, seq_len):
+            for j in range(i):
+                mask[i][j] = 0
+        return mask
+
+    def forward(self, input_ids, padding_mask=None, images=None): # x: [batch, seq_len]
         input_ids = self.embedding(input_ids)
-        seq_len = input_ids.shape[1]
-        mask =self.mask[:seq_len,:seq_len]
+        text_len = input_ids.shape[1]
+        if images != None:
+            images = self.vit(images)
+            seq_len = images.shape[1] + input_ids.shape[1]
+            mask = self.get_vlm_mask(images.shape[1], seq_len)
+            images_padding_mask = torch.zeros(images.shape[0], images.shape[1])
+            padding_mask = torch.cat((images_padding_mask, padding_mask), dim=-1)
+            input_ids = torch.cat((images, input_ids), dim=1)
+        else: 
+            seq_len = input_ids.shape[1]
+            mask = nn.Transformer.generate_square_subsequent_mask(seq_len)
         output = self.decoder(input_ids, mask, src_key_padding_mask=padding_mask)
         logits = self.prob_linear(output)
-        return logits      
+        return logits[:,-text_len:,:]    
     
-    def generate(self, input_ids, eos ,pad, im_end, temperature=1, top_k=1):
+    def generate(self, input_ids, eos ,pad, im_end, temperature=1, top_k=1, images=None):
         self.eval()
         with torch.no_grad():
-            seq_len = input_ids.shape[1]
+            if images != None:
+                seq_len = input_ids.shape[1] + images.shape[1]
+            else:
+                seq_len = input_ids.shape[1]
             while seq_len < MAX_SEQ_LEN:
-                padding_mask = torch.zeros(1, seq_len)
-                logits = self.forward(input_ids ,padding_mask)
+                padding_mask = torch.zeros(1, input_ids.shape[1])
+                logits = self.forward(input_ids ,padding_mask, images)
                 logits = logits[0,-1,:]/temperature
                 values, indices = torch.topk(logits, top_k)
                 values = F.softmax(values, dim=-1)
@@ -50,17 +73,25 @@ class GPT(nn.Module):
             return input_ids.squeeze(0).tolist()[1:]
 
 if __name__ == "__main__":
-    chatgpt = GPT(VOCAB_SIZE, GPT_DIM, MAX_SEQ_LEN, GPT_HEAD, GPT_FF, GPT_BLOCKS)
+    chatgpt = GPT()
+    # input_ids = torch.randint(500, VOCAB_SIZE, (1,5))
+    # padding_mask = torch.zeros(1,5)
+    input_ids = torch.randint(500, VOCAB_SIZE, (10, 5))
+    padding_mask = torch.zeros(10, 5)
+    images = torch.randn(10, 3, IMAGE_SIZE, IMAGE_SIZE)
+    logits = chatgpt(input_ids, padding_mask, images)
+    print(logits.shape)
+
+
     input_ids = torch.randint(500, VOCAB_SIZE, (1,5))
     padding_mask = torch.zeros(1,5)
-    # logits = chatgpt(input_ids, padding_mask)
-    # print(logits.shape)
+    images = torch.randn(1, 3, IMAGE_SIZE, IMAGE_SIZE)
 
     tokenizer = BPETokenizer()
     tokenizer.load('tokenizer.pkl')
     eos_id = tokenizer.encode(EOS)[0]
     pad_id = tokenizer.encode(PAD)[0]
     im_end_id = tokenizer.encode(IM_END)[0]
-    output_ids = chatgpt.generate(input_ids, eos_id, pad_id, im_end_id)
+    output_ids = chatgpt.generate(input_ids, eos_id, pad_id, im_end_id, images=images)
     output = tokenizer.decode(output_ids)
     print(f"output:\n{output}")
