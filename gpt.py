@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import random
 from tokenizer import BPETokenizer
 from vit import VisionTransformer
+from TransformerEncoder import TransformerEncoder, TransformerEncoderLayer
 
 class GPT(nn.Module):
     def __init__(self):
@@ -13,8 +14,15 @@ class GPT(nn.Module):
         self.embedding = EmbeddingWithPosition()
 
         # 用encoder加掩码的方式实现decoder-only
-        decoder_layer = nn.TransformerEncoderLayer(DIM, GPT_HEAD, GPT_FF, batch_first=True)
-        self.decoder = nn.TransformerEncoder(decoder_layer, GPT_BLOCKS)
+        
+        # nn自带的encoder
+        # decoder_layer = nn.TransformerEncoderLayer(DIM, GPT_HEAD, GPT_FF, batch_first=True)
+        # self.decoder = nn.TransformerEncoder(decoder_layer, GPT_BLOCKS)
+
+        # 手写encoder
+        decoder_layer = TransformerEncoderLayer(DIM, GPT_HEAD, GPT_FF, dropout=0.1, batch_first=True)
+        self.decoder = TransformerEncoder(decoder_layer, GPT_BLOCKS)
+
         self.prob_linear = nn.Linear(DIM, VOCAB_SIZE)
         self.vit = VisionTransformer()
     
@@ -41,7 +49,7 @@ class GPT(nn.Module):
         else: 
             seq_len = input_ids.shape[1]
             mask = nn.Transformer.generate_square_subsequent_mask(seq_len)
-        output = self.decoder(input_ids, mask, src_key_padding_mask=padding_mask)
+        output = self.decoder(input_ids, mask=mask, src_key_padding_mask=padding_mask)
         logits = self.prob_linear(output)
         return logits[:,-text_len:,:]    
     
@@ -92,6 +100,6 @@ if __name__ == "__main__":
     eos_id = tokenizer.encode(EOS)[0]
     pad_id = tokenizer.encode(PAD)[0]
     im_end_id = tokenizer.encode(IM_END)[0]
-    output_ids = chatgpt.generate(input_ids, eos_id, pad_id, im_end_id, images=images)
+    output_ids = chatgpt.generate(input_ids, eos_id, pad_id, im_end_id, temperature=TEMPERATURE, top_k=TOP_K, images=images)
     output = tokenizer.decode(output_ids)
     print(f"output:\n{output}")
